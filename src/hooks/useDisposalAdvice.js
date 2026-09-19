@@ -1,64 +1,76 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getDisposalAdvice } from "../services/adviceService";
 
-const IDLE = { status: "idle", advice: null, error: null };
+const IDLE = { status: "idle", advice: null, error: null, subject: null };
 
 /**
- * Fetches disposal advice for a confirmed detection.
+ * Holds disposal advice for one item the user asked about.
  *
- * Deliberately manual: `request()` is wired to a button, so a model call
- * happens once per item the user actually asks about rather than on every
- * camera frame. Any in-flight request is aborted if the item changes or the
- * component unmounts.
+ * Deliberately NOT keyed to the live detection. Advice is a snapshot of the
+ * moment it was requested: the camera keeps running, the detected class comes
+ * and goes, and none of that should wipe a result the user is still reading.
+ * `subject` records which item it was generated for so the UI can say so, and
+ * the only ways to lose it are `clear()` or asking about something else.
+ *
+ * Requests are manual (`request(detection)`), so a model call happens once per
+ * item the user actually asks about rather than on every camera frame.
  *
  * status: idle | loading | ready | error
  */
-export function useDisposalAdvice(detection, { material, location } = {}) {
+export function useDisposalAdvice() {
   const [state, setState] = useState(IDLE);
   const controllerRef = useRef(null);
-  const key = detection ? `${detection.rawClass ?? detection.className}` : null;
 
   const abort = useCallback(() => {
     controllerRef.current?.abort();
     controllerRef.current = null;
   }, []);
 
-  // A different item invalidates whatever was on screen.
-  useEffect(() => {
-    abort();
-    setState(IDLE);
-  }, [key, abort]);
-
   useEffect(() => abort, [abort]);
 
-  /** @param {{lat:number, lon:number}} [overrideLocation] freshly resolved coords */
-  const request = useCallback(async (overrideLocation) => {
-    if (!detection) return;
-    abort();
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    setState({ status: "loading", advice: null, error: null });
+  /**
+   * @param {import("../types/contracts").Detection} detection item to advise on
+   * @param {{material?: string|null, location?: object}} [context]
+   */
+  const request = useCallback(
+    async (detection, { material, location } = {}) => {
+      if (!detection) return;
+      abort();
+      const controller = new AbortController();
+      controllerRef.current = controller;
 
-    try {
-      const advice = await getDisposalAdvice(
-        detection,
-        { material, location: overrideLocation ?? location },
-        { signal: controller.signal }
-      );
-      if (controller.signal.aborted) return;
-      setState({ status: "ready", advice, error: null });
-    } catch (error) {
-      if (controller.signal.aborted || error.name === "AbortError") return;
-      setState({ status: "error", advice: null, error });
-    } finally {
-      if (controllerRef.current === controller) controllerRef.current = null;
-    }
-  }, [detection, material, location, abort]);
+      // Snapshot the subject now: `detection` is a live object that will have
+      // moved on by the time the response lands.
+      const subject = {
+        className: detection.className,
+        rawClass: detection.rawClass,
+        category: detection.category,
+        confidence: detection.confidence,
+      };
+      setState({ status: "loading", advice: null, error: null, subject });
 
-  const reset = useCallback(() => {
+      try {
+        const advice = await getDisposalAdvice(
+          detection,
+          { material, location },
+          { signal: controller.signal }
+        );
+        if (controller.signal.aborted) return;
+        setState({ status: "ready", advice, error: null, subject });
+      } catch (error) {
+        if (controller.signal.aborted || error.name === "AbortError") return;
+        setState({ status: "error", advice: null, error, subject });
+      } finally {
+        if (controllerRef.current === controller) controllerRef.current = null;
+      }
+    },
+    [abort]
+  );
+
+  const clear = useCallback(() => {
     abort();
     setState(IDLE);
   }, [abort]);
 
-  return { ...state, request, reset };
+  return { ...state, request, clear };
 }

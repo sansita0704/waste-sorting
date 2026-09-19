@@ -11,6 +11,7 @@ import {
   Sparkles,
   Trash2,
   Wrench,
+  X,
 } from "lucide-react";
 import Button from "../ui/Button";
 import Card from "../ui/Card";
@@ -41,7 +42,41 @@ function Section({ title, children }) {
   );
 }
 
-export default function AdvicePanel({ status, advice, error, onRequest, onRetry, canRequest, reason }) {
+/**
+ * Banner naming the item this advice was generated for.
+ *
+ * The advice outlives the detection that produced it, so without this the user
+ * can end up reading guidance for a bottle while the camera has moved on to a
+ * can. It also carries the dismiss control.
+ */
+function SubjectBar({ subject, onClear }) {
+  if (!subject) return null;
+  return (
+    <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-ink-900/60 px-3 py-2">
+      <p className="min-w-0 text-xs text-slate-400">
+        Advice for{" "}
+        <span className="font-semibold text-white">{subject.className}</span>
+      </p>
+      {onClear && (
+        <Button onClick={onClear} icon={X} variant="ghost" size="sm" className="shrink-0 !px-2 !py-1">
+          <span className="sr-only">Dismiss advice</span>
+        </Button>
+      )}
+    </div>
+  );
+}
+
+export default function AdvicePanel({
+  status,
+  advice,
+  error,
+  subject,
+  onRequest,
+  onRetry,
+  onClear,
+  canRequest,
+  reason,
+}) {
   if (status === "idle") {
     return (
       <Card variant="inset" className="p-4">
@@ -73,11 +108,16 @@ export default function AdvicePanel({ status, advice, error, onRequest, onRetry,
 
   if (status === "loading") {
     return (
-      <Card variant="inset" className="flex items-center gap-3 p-4">
-        <Loader2 size={17} className="animate-spin text-brand-400" aria-hidden="true" />
-        <div>
-          <p className="text-sm font-medium text-white">Working out your options…</p>
-          <p className="mt-0.5 text-xs text-slate-400">Checking disposal routes and nearby facilities.</p>
+      <Card variant="inset" className="p-4">
+        <SubjectBar subject={subject} />
+        <div className="flex items-center gap-3">
+          <Loader2 size={17} className="animate-spin text-brand-400" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium text-white">Working out your options…</p>
+            <p className="mt-0.5 text-xs text-slate-400">
+              Checking disposal routes and nearby facilities.
+            </p>
+          </div>
         </div>
       </Card>
     );
@@ -86,6 +126,7 @@ export default function AdvicePanel({ status, advice, error, onRequest, onRetry,
   if (status === "error") {
     return (
       <Card variant="inset" className="p-4" role="alert">
+        <SubjectBar subject={subject} onClear={onClear} />
         <p className="text-sm font-medium text-danger-400">Couldn't get advice</p>
         <p className="mt-1 text-xs leading-relaxed text-slate-400">
           {error?.message ?? "The advice service didn't respond."}
@@ -121,10 +162,11 @@ export default function AdvicePanel({ status, advice, error, onRequest, onRetry,
   const FinalIcon = finalMeta.icon;
 
   return (
-    <Card variant="inset" className="animate-fade-up space-y-5 p-4">
-      <header className="flex items-start justify-between gap-3">
-        <p className="text-sm leading-relaxed text-slate-200">{advice.summary}</p>
-      </header>
+    <Card variant="inset" className="animate-fade-up p-4">
+      <SubjectBar subject={subject} onClear={onClear} />
+
+      <div className="space-y-5">
+      <p className="text-sm leading-relaxed text-slate-200">{advice.summary}</p>
 
       {advice.safety && (
         <div className="flex items-start gap-2.5 rounded-xl border border-danger-500/35 bg-danger-500/[0.08] p-3">
@@ -236,6 +278,7 @@ export default function AdvicePanel({ status, advice, error, onRequest, onRetry,
         )}
         <span>Locations from {advice.facilitySource}. Verify before acting.</span>
       </footer>
+      </div>
     </Card>
   );
 }

@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ScanLine, Sparkles } from "lucide-react";
 import AdvicePanel from "../components/scanner/AdvicePanel";
 import DetectionResultCard from "../components/scanner/DetectionResultCard";
 import LiveStream from "../components/scanner/LiveStream";
 import MobileResultSheet from "../components/scanner/MobileResultSheet";
 import TokenModal from "../components/scanner/TokenModal";
+import Card from "../components/ui/Card";
+import EmptyState from "../components/ui/EmptyState";
+import TabBar from "../components/ui/TabBar";
 import { ADVICE_MIN_CONFIDENCE } from "../config/constants";
 import { getMaterial } from "../config/wasteTaxonomy";
 import { useDetection } from "../hooks/useDetection";
-import { useDisposalAdvice } from "../hooks/useDisposalAdvice";
 import { useDisposalToken } from "../hooks/useDisposalToken";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { playChime } from "../utils/audio";
@@ -16,28 +19,34 @@ import { grabFrame } from "../utils/frame";
 /**
  * Wires camera -> detection loop -> classification, advice and disposal token.
  * Owns the <video> ref so the detection hook and the stream share one element.
+ *
+ * The right-hand column is tabbed. "Detection" tracks the live feed and empties
+ * when the item leaves frame; "Advice" holds whatever the user last asked about
+ * and stays put regardless of what the camera is doing.
  */
-export default function ScannerPage({ camera, muted, onToggleMute, onScan }) {
+export default function ScannerPage({ camera, muted, onToggleMute, onScan, advice }) {
   const videoRef = useRef(null);
   const captureUrlRef = useRef(null);
   const [lastCapture, setLastCapture] = useState(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [tab, setTab] = useState("detection");
 
   const { detection, latencyMs, error: detectionError } = useDetection(videoRef, camera.isLive);
   const disposal = useDisposalToken(detection);
-  const { location, resolve: resolveLocation } = useGeolocation();
+  const { resolve: resolveLocation } = useGeolocation();
 
   const material = detection ? getMaterial(detection.rawClass)?.id ?? null : null;
-  const adviceQuery = useDisposalAdvice(detection, { material, location });
 
   // Advice is requested per confirmed item, never per frame. Location is
   // resolved first and passed straight through: reading it back from state in
   // the same turn would still hold the previous render's fallback coordinates.
-  const { request: requestAdviceFor } = adviceQuery;
-  const requestAdvice = useCallback(async () => {
-    const fresh = await resolveLocation();
-    requestAdviceFor(fresh);
-  }, [resolveLocation, requestAdviceFor]);
+  const { request: requestAdvice } = advice;
+  const handleRequestAdvice = useCallback(async () => {
+    if (!detection) return;
+    setTab("advice");
+    const location = await resolveLocation();
+    requestAdvice(detection, { material, location });
+  }, [detection, material, resolveLocation, requestAdvice]);
 
   // Log confirmed detections to the local impact ledger. `onScan` de-duplicates,
   // so one item held in frame counts once.
@@ -45,10 +54,11 @@ export default function ScannerPage({ camera, muted, onToggleMute, onScan }) {
     onScan(detection);
   }, [detection, onScan]);
 
-  // Collapse the mobile sheet when the item leaves the frame.
+  // Collapse the mobile sheet when the item leaves the frame, unless the user
+  // is reading advice - that outlives the detection by design.
   useEffect(() => {
-    if (!detection) setSheetOpen(false);
-  }, [detection]);
+    if (!detection && tab === "detection") setSheetOpen(false);
+  }, [detection, tab]);
 
   const handleCapture = useCallback(
     async (mirrored) => {
@@ -70,28 +80,66 @@ export default function ScannerPage({ camera, muted, onToggleMute, onScan }) {
   );
 
   const confident = (detection?.confidence ?? 0) >= ADVICE_MIN_CONFIDENCE;
+  const adviceReason = !detection
+    ? "Point the camera at an item first, then ask for advice."
+    : `Confidence is ${((detection.confidence ?? 0) * 100).toFixed(0)}%. Hold the item steadier and better lit, then scan again for advice.`;
 
-  const result = (
+  const tabs = [
+    { id: "detection", label: "Detection", icon: ScanLine },
+    {
+      id: "advice",
+      label: "Advice",
+      icon: Sparkles,
+      badge: advice.status === "ready" || advice.status === "loading",
+    },
+  ];
+
+  const detectionView = (
     <DetectionResultCard
       detection={detection}
       isLive={camera.isLive}
       tokenStatus={disposal.status}
       tokenError={disposal.error}
       onGenerateToken={disposal.issue}
-      advice={
-        detection && (
-          <AdvicePanel
-            status={adviceQuery.status}
-            advice={adviceQuery.advice}
-            error={adviceQuery.error}
-            onRequest={requestAdvice}
-            onRetry={requestAdvice}
-            canRequest={confident}
-            reason={`Confidence is ${((detection.confidence ?? 0) * 100).toFixed(0)}%. Hold the item steadier and better lit, then scan again for advice.`}
-          />
-        )
-      }
     />
+  );
+
+  const adviceView =
+    advice.status === "idle" && !detection ? (
+      <Card>
+        <EmptyState
+          icon={Sparkles}
+          tone="brand"
+          title="No advice yet"
+          body="Scan an item, then ask for advice. It stays here while you keep scanning."
+        />
+      </Card>
+    ) : (
+      <AdvicePanel
+        status={advice.status}
+        advice={advice.advice}
+        error={advice.error}
+        subject={advice.subject}
+        onRequest={handleRequestAdvice}
+        onRetry={handleRequestAdvice}
+        onClear={advice.clear}
+        canRequest={confident}
+        reason={adviceReason}
+      />
+    );
+
+  const panel = (
+    <>
+      <TabBar tabs={tabs} active={tab} onChange={setTab} />
+      <div
+        role="tabpanel"
+        id={`panel-${tab}`}
+        aria-labelledby={`tab-${tab}`}
+        className="mt-3"
+      >
+        {tab === "detection" ? detectionView : adviceView}
+      </div>
+    </>
   );
 
   return (
@@ -111,23 +159,27 @@ export default function ScannerPage({ camera, muted, onToggleMute, onScan }) {
           />
         </div>
 
-        {/* Desktop: result sits beside the feed. */}
-        <div className="hidden lg:col-span-2 lg:block">{result}</div>
+        {/* Desktop: tabbed panel beside the feed. */}
+        <div className="hidden lg:col-span-2 lg:block">{panel}</div>
 
-        {/* Mobile: nothing detected yet, so show the prompt inline. */}
-        {!detection && <div className="lg:hidden">{result}</div>}
+        {/* Mobile: shown inline until there's something to put in the sheet. */}
+        {!detection && advice.status === "idle" && <div className="lg:hidden">{panel}</div>}
 
         {/* Mobile: clearance so the collapsed sheet never covers page content. */}
-        {detection && <div aria-hidden="true" className="h-16 lg:hidden" />}
+        {(detection || advice.status !== "idle") && (
+          <div aria-hidden="true" className="h-16 lg:hidden" />
+        )}
       </div>
 
-      {/* Mobile: a detected result becomes a bottom sheet over the camera. */}
+      {/* Mobile: a result becomes a bottom sheet over the camera. */}
       <MobileResultSheet
         open={sheetOpen}
         onToggle={() => setSheetOpen((o) => !o)}
         detection={detection}
+        advice={advice}
+        tab={tab}
       >
-        {result}
+        {panel}
       </MobileResultSheet>
 
       {disposal.status === "ready" && <TokenModal token={disposal.token} onClose={disposal.clear} />}

@@ -1,5 +1,48 @@
-import { ChevronUp, X } from "lucide-react";
+import { ChevronUp, Sparkles, X } from "lucide-react";
 import { getBin } from "../../config/wasteTaxonomy";
+
+/**
+ * What the collapsed peek should say.
+ *
+ * Advice outlives the detection that produced it, so once the user has asked
+ * for advice the sheet stays reachable even after the item leaves the frame -
+ * otherwise the result they are reading would slide away mid-sentence.
+ */
+function peekFor(detection, advice, tab) {
+  const hasAdvice = advice && advice.status !== "idle";
+  if (tab === "advice" && hasAdvice) {
+    const subject = advice.subject?.className;
+    return {
+      icon: Sparkles,
+      hex: "#8B5CF6",
+      title: subject ? `Advice · ${subject}` : "Disposal advice",
+      subtitle:
+        advice.status === "loading"
+          ? "Working out your options…"
+          : advice.status === "error"
+            ? "Couldn't get advice"
+            : "Tap to read",
+    };
+  }
+  if (detection) {
+    const bin = getBin(detection.category);
+    return {
+      icon: bin.icon,
+      hex: bin.hex,
+      title: detection.className,
+      subtitle: bin.label,
+    };
+  }
+  if (hasAdvice) {
+    return {
+      icon: Sparkles,
+      hex: "#8B5CF6",
+      title: advice.subject?.className ? `Advice · ${advice.subject.className}` : "Disposal advice",
+      subtitle: "Tap to read",
+    };
+  }
+  return null;
+}
 
 /**
  * Mobile-only bottom sheet for the detection result.
@@ -9,10 +52,10 @@ import { getBin } from "../../config/wasteTaxonomy";
  * the full result. This is a different layout from desktop rather than a
  * narrowed copy of it.
  */
-export default function MobileResultSheet({ open, onToggle, detection, children }) {
-  if (!detection) return null;
-  const bin = getBin(detection.category);
-  const BinIcon = bin.icon;
+export default function MobileResultSheet({ open, onToggle, detection, advice, tab, children }) {
+  const peek = peekFor(detection, advice, tab);
+  if (!peek) return null;
+  const PeekIcon = peek.icon;
 
   return (
     <>
@@ -47,17 +90,15 @@ export default function MobileResultSheet({ open, onToggle, detection, children 
 
             <span
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-              style={{ backgroundColor: `${bin.hex}22`, color: bin.hex }}
+              style={{ backgroundColor: `${peek.hex}22`, color: peek.hex }}
             >
-              <BinIcon size={18} aria-hidden="true" />
+              <PeekIcon size={18} aria-hidden="true" />
             </span>
 
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-bold text-white">
-                {detection.className}
-              </span>
-              <span className="block truncate text-xs font-medium" style={{ color: bin.hex }}>
-                {bin.label}
+              <span className="block truncate text-sm font-bold text-white">{peek.title}</span>
+              <span className="block truncate text-xs font-medium" style={{ color: peek.hex }}>
+                {peek.subtitle}
               </span>
             </span>
 

@@ -22,7 +22,6 @@ export default function DetectionResultCard({
   tokenError,
   onGenerateToken,
   isLive,
-  advice,
 }) {
   if (!detection) {
     return (
@@ -90,8 +89,6 @@ export default function DetectionResultCard({
 
         {/* key resets checked steps when the detected item changes */}
         <PrepChecklist key={detection.className} steps={detection.steps} />
-
-        {advice}
 
         <WhyThisBin detection={detection} />
 
