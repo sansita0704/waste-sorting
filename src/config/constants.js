@@ -6,6 +6,15 @@ export const SUCCESS = "#22C55E"; // green - recyclable / success
 
 export const LOCATION_LABEL = "Jaipur, IN";
 
+// Used for the facility search until the user grants precise location. The UI
+// always states which of the two is in play.
+export const FALLBACK_LOCATION = { lat: 26.9124, lon: 75.7873, label: LOCATION_LABEL };
+
+// App policy: below this the UI asks for a rescan instead of requesting advice.
+// Kept in step with ADVICE_MIN_CONFIDENCE on the server, which is authoritative.
+// This is NOT the model's own floor (that is ECOSCAN_CONF, default 0.35).
+export const ADVICE_MIN_CONFIDENCE = 0.5;
+
 // How often a frame is sent to the model (ms). Requests never overlap: the next
 // one is scheduled only after the previous finishes, so the real cadence is this
 // plus inference time (~60-140ms on CPU).

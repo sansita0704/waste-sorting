@@ -50,6 +50,50 @@ src/
                               classVoter.js (steadies flickering classifications), audio.js
 ```
 
+## Disposal advice (Groq) and drop-off points (OpenStreetMap)
+
+Three sources, kept strictly apart:
+
+| Question | Answered by |
+|---|---|
+| What is this? | the YOLO model |
+| What should I do with it? | a language model on Groq, via `POST /api/ai/advice` |
+| Where can I take it? | OpenStreetMap, via the Overpass API |
+
+Set `GROQ_API_KEY` in `.env` (gitignored) to enable the advice path. Groq uses
+strict `json_schema` structured output, so the model must emit every required
+key. Measured against this schema: `openai/gpt-oss-120b` (the default) answers
+in ~3s and covers every action type; `qwen/qwen3.8-27b` works but is slower;
+`openai/gpt-oss-20b` fails validation because it omits `safety`. Override with
+`ADVICE_MODEL`.
+
+`server/lib/` holds the handler; `api/ai/advice.js` is the Vercel entry point and
+`server/devMiddleware.js` mounts the identical handler into the Vite dev server,
+so there is one code path and no third process to run. The API key is read from
+the server environment only — it is never prefixed with `VITE_`, so it cannot
+reach the bundle.
+
+Rules that keep it honest:
+
+- The language model is sent **only** the vision model's class and confidence
+  plus the rule-table values, each explicitly labelled by provenance. It is told
+  the vision model cannot see condition, residue or damage, so it can't claim
+  the scan observed them.
+- It **never** produces facilities. Names, addresses, hours, phone numbers and
+  distances come from OSM tags or are computed from OSM coordinates; anything
+  OSM doesn't have is omitted rather than filled in.
+- It is called **once per confirmed item**, from a button — never per frame.
+- Below `ADVICE_MIN_CONFIDENCE` (default 0.5) the request short-circuits and the
+  UI asks for a rescan, so a shaky class never gets confident-sounding advice.
+- If it is unconfigured or fails, `server/lib/rulesFallback.js` answers from the
+  existing waste rules in the same shape, tagged `source: "rules"`, and the UI
+  says which path it took.
+
+Overpass is a free, shared, slot-limited service: results are cached in-process
+for 10 minutes and the whole lookup is capped by `OVERPASS_BUDGET_MS` (8s). A
+slow or rate-limited lookup yields an empty list with a note — the advice still
+arrives.
+
 ## What is AI, and what is a rule
 
 The model returns exactly three things: an object **class** (one of eleven), a

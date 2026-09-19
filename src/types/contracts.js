@@ -27,6 +27,38 @@
  */
 
 /**
+ * @typedef {Object} DisposalAdvice
+ * @property {"ok"|"low_confidence"} status
+ * @property {"ai"|"rules"|"none"} source            which path produced the guidance
+ * @property {boolean} degraded                      true when the model was tried and failed
+ * @property {string|null} model                     model id when source is "ai"
+ * @property {string|null} summary
+ * @property {{bin: string, stream: string, tips: string[]}|null} segregation
+ * @property {{type: string, title: string, detail: string, suitability: string}[]} actions
+ * @property {string[]} preparation
+ * @property {string|null} safety
+ * @property {{type: string, why: string}|null} finalAction
+ * @property {DropoffFacility[]} facilities          from a maps database, never model-generated
+ * @property {string|null} facilitySource
+ */
+
+/**
+ * @typedef {Object} DropoffFacility
+ * @property {string} id
+ * @property {string} name
+ * @property {string} kind
+ * @property {number} distanceKm
+ * @property {number} lat
+ * @property {number} lon
+ * @property {string|null} address
+ * @property {string|null} openingHours
+ * @property {string|null} phone
+ * @property {string[]} accepts
+ * @property {string} source
+ * @property {string} osmUrl
+ */
+
+/**
  * @typedef {Object} LedgerSummary
  * @property {number} points
  * @property {number} streakDays
