@@ -24,6 +24,7 @@ src/
 ├── hooks/
 │   ├── useCamera.js          WebRTC getUserMedia lifecycle
 │   ├── useDetection.js       frame -> model loop (no overlapping requests)
+│   ├── useVideoViewport.js   maps frame coords -> element px through the cover-crop
 │   ├── useMeasuredFps.js     real FPS from the video element
 │   ├── useAsyncData.js       loading/error/data for any service call
 │   └── useDisposalToken.js
@@ -37,13 +38,34 @@ src/
 │   ├── ledger/               EcoLedger, WeeklyActivityChart
 │   └── leaderboard/          Leaderboard
 ├── pages/                    ScannerPage (wires everything), MapPage, AnalyticsPage, LeaderboardPage
-└── utils/                    frame.js (video -> Blob), audio.js
+└── utils/                    frame.js (video -> Blob), boxMapping.js (overlay geometry), audio.js
 ```
 
+## Running the backend
+```bash
+cd backend
+python -m venv venv && venv/Scripts/activate   # source venv/bin/activate on macOS/Linux
+pip install -r requirements.txt
+python main.py                                 # serves on http://127.0.0.1:8000
+```
+`npm run dev` proxies `/api` to that address (override with `VITE_API_PROXY`).
+Check `GET /api/v1/health` to confirm the model loaded.
+
+The backend reads these optional environment variables:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `ECOSCAN_MODEL_PATH` | auto-discovered in `backend/models/` | Checkpoint to load |
+| `ECOSCAN_CONF` | `0.35` | Minimum confidence to report a detection |
+| `ECOSCAN_IOU` | `0.45` | NMS IoU threshold |
+| `ECOSCAN_IMGSZ` | `640` | Inference size (the size the model was trained at) |
+| `ECOSCAN_DEVICE` | auto | e.g. `cpu`, `0` for the first GPU |
+| `ECOSCAN_CORS_ORIGINS` | localhost + LAN | Comma-separated allowlist |
+
 ## Connecting your model and backend
-Set `VITE_USE_MOCK=false` in `.env`, then implement the endpoints below.
-Each service has an adapter that maps your response to the UI shape, so only
-that one function changes if your format differs.
+The UI calls the real backend by default; set `VITE_USE_MOCK=true` in `.env` to
+demo it without one. Each service has an adapter that maps your response to the
+UI shape, so only that one function changes if your format differs.
 
 | Purpose | Endpoint | Service |
 |---|---|---|
@@ -53,23 +75,41 @@ that one function changes if your format differs.
 | EcoPoints summary | `GET /api/v1/ledger/summary` | `ledgerService.getLedgerSummary` |
 | Leaderboard | `GET /api/v1/leaderboard` | `ledgerService.getLeaderboard` |
 
-`/detect` response (return `null` / empty when nothing is found). `bbox` is
-normalised 0..1 with a top-left origin, and is measured on the un-mirrored frame:
+`/detect` response. The top level describes the most prominent item; `detections`
+lists every box with that item first. Omit `label` when nothing is found. `bbox`
+is normalised 0..1 with a top-left origin, measured on the un-mirrored frame:
 ```json
 {
   "label": "PET Plastic Bottle", "category": "Dry / Recyclable",
   "confidence": 0.964, "weight_g": 28.5, "material_grade": "PET-01",
   "contamination": { "level": "Low", "label": "Clean", "score": 0.14 },
   "steps": ["Unscrew cap & separate collar.", "..."],
-  "bbox": { "x": 0.34, "y": 0.22, "w": 0.26, "h": 0.56 }
+  "bbox": { "x": 0.34, "y": 0.22, "w": 0.26, "h": 0.56 },
+  "detections": [
+    { "class_name": "plastic_bottle", "label": "PET Plastic Bottle",
+      "category": "Dry / Recyclable", "confidence": 0.964,
+      "bbox": { "x": 0.34, "y": 0.22, "w": 0.26, "h": 0.56 }, "score": 0.71 }
+  ],
+  "frame": { "w": 640, "h": 480 }
 }
 ```
+"Most prominent" is not simply the top confidence: a large, centred object beats
+a marginally more confident speck in a corner, since that is the item the user is
+holding up to the camera.
 
 **In-browser inference instead of HTTP:** in `detectionService.detect`, pass the
 `video` element straight to ONNX Runtime Web / TensorFlow.js and map the output
 through `toDetection`. Nothing else changes.
 
-**Tuning:** `DETECTION_INTERVAL_MS` in `config/constants.js` sets how often frames are sent.
+**Tuning** (`config/constants.js`): `DETECTION_INTERVAL_MS` sets how often frames
+are sent, `DETECTION_HOLD_MS` how long a box survives a dropped frame, and
+`BOX_SMOOTHING` how hard the box is damped against jitter.
+
+**Overlay geometry:** the video is drawn with `object-fit: cover`, so the element
+shows a centre-crop of the frame whenever the camera's aspect ratio differs from
+the card's. `utils/boxMapping.js` maps normalised boxes through that crop —
+treating them as plain percentages of the element puts a 4:3 webcam's boxes ~19%
+of the card height off target.
 
 ## Placeholders to replace
 - `QrGlyph` is a visual stand-in. Use a real QR encoder (e.g. `qrcode.react`).

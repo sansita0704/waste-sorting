@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Aperture, Camera, CameraOff, ScanLine, Volume2, VolumeX } from "lucide-react";
 import { useMeasuredFps } from "../../hooks/useMeasuredFps";
+import { useVideoViewport } from "../../hooks/useVideoViewport";
 import ActionButton from "../ui/ActionButton";
 import Badge from "../ui/Badge";
 import Card from "../ui/Card";
@@ -25,8 +26,10 @@ export default function LiveStream({
   lastCapture,
 }) {
   const [mirrored, setMirrored] = useState(true);
+  const containerRef = useRef(null);
   const { stream, status, isLive, settings } = camera;
   const fps = useMeasuredFps(videoRef, isLive) || Math.round(settings?.frameRate ?? 0);
+  const viewport = useVideoViewport(videoRef, containerRef, isLive);
 
   // Attach (or detach) the MediaStream whenever it changes.
   useEffect(() => {
@@ -38,7 +41,7 @@ export default function LiveStream({
 
   return (
     <Card className="overflow-hidden">
-      <div className="relative aspect-video w-full bg-zinc-950">
+      <div ref={containerRef} className="relative aspect-video w-full overflow-hidden bg-zinc-950">
         <video
           ref={videoRef}
           autoPlay
@@ -71,7 +74,7 @@ export default function LiveStream({
                 </Badge>
               )}
             </div>
-            <BoundingBox detection={detection} mirrored={mirrored} />
+            <BoundingBox detection={detection} mirrored={mirrored} viewport={viewport} />
           </>
         )}
 

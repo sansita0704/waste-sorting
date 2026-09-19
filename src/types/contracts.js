@@ -14,6 +14,15 @@
  * @property {{level: string, label: string, score: number}} contamination  score 0..1
  * @property {string[]} steps            preparation checklist
  * @property {{x: number, y: number, w: number, h: number}} box  normalised 0..1, top-left origin
+ * @property {DetectionBox[]} [detections]  every box in the frame, this one first
+ */
+
+/**
+ * @typedef {Object} DetectionBox
+ * @property {string} className
+ * @property {string} category
+ * @property {number} confidence         0..1
+ * @property {{x: number, y: number, w: number, h: number}} box  normalised 0..1
  */
 
 /**

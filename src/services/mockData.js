@@ -34,9 +34,22 @@ export const MOCK_DETECTION = {
 export async function mockDetect(signal) {
   await wait(12 + Math.random() * 6, signal);
   const jitter = () => (Math.random() - 0.5) * 0.016;
+  const box = {
+    ...MOCK_DETECTION.box,
+    x: MOCK_DETECTION.box.x + jitter(),
+    y: MOCK_DETECTION.box.y + jitter(),
+  };
   return {
     ...MOCK_DETECTION,
-    box: { ...MOCK_DETECTION.box, x: MOCK_DETECTION.box.x + jitter(), y: MOCK_DETECTION.box.y + jitter() },
+    box,
+    detections: [
+      {
+        className: MOCK_DETECTION.className,
+        category: MOCK_DETECTION.category,
+        confidence: MOCK_DETECTION.confidence,
+        box,
+      },
+    ],
   };
 }
 

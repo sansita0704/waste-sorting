@@ -14,9 +14,11 @@ import { mockDetect } from "./mockData";
  *   "confidence": 0.964, "weight_g": 28.5, "material_grade": "PET-01",
  *   "contamination": { "level": "Low", "label": "Clean", "score": 0.14 },
  *   "steps": ["..."],
- *   "bbox": { "x": 0.34, "y": 0.22, "w": 0.26, "h": 0.56 }
+ *   "bbox": { "x": 0.34, "y": 0.22, "w": 0.26, "h": 0.56 },
+ *   "detections": [ { "label": "...", "confidence": 0.9, "bbox": {...} }, ... ]
  * }
- * Return `null` (or an empty body) when nothing is detected.
+ * The top level describes the most prominent item; `detections` lists every box
+ * (that item first). `label` is absent when nothing is detected.
  */
 function toDetection(raw) {
   if (!raw || !raw.label) return null;
@@ -29,6 +31,12 @@ function toDetection(raw) {
     contamination: raw.contamination,
     steps: raw.steps ?? [],
     box: raw.bbox,
+    detections: (raw.detections ?? []).map((d) => ({
+      className: d.label,
+      category: d.category,
+      confidence: d.confidence,
+      box: d.bbox,
+    })),
   };
 }
 

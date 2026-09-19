@@ -3,7 +3,18 @@ export const LOCATION_LABEL = "Jaipur, IN";
 
 // How often a frame is sent to the model (ms). Requests never overlap:
 // the next one is scheduled only after the previous one finishes.
-export const DETECTION_INTERVAL_MS = 250;
+export const DETECTION_INTERVAL_MS = 200;
+
+// Keep showing the last hit this long after it stops being detected, so a
+// single dropped frame doesn't blink the overlay off and on.
+export const DETECTION_HOLD_MS = 700;
+
+// Weight of the newest box in the smoothing average (0..1). Lower = steadier
+// but laggier; higher = snappier but jitterier.
+export const BOX_SMOOTHING = 0.45;
+
+// Consecutive failed requests before the stale box is cleared off the feed.
+export const MAX_CONSECUTIVE_ERRORS = 3;
 
 // Display-only. Browsers don't expose the codec of a getUserMedia stream.
 export const STREAM_CODEC_LABEL = "HEVC";

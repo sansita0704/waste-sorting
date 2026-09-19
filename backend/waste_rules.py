@@ -9,6 +9,8 @@ Maps model class names to frontend display contracts:
 - steps: Actionable preparation steps checklist
 """
 
+import copy
+
 WASTE_RULES = {
     "plastic_bottle": {
         "label": "PET Plastic Bottle",
@@ -159,12 +161,61 @@ DEFAULT_RULE = {
 }
 
 
+# Alternate class names seen in TACO-derived label sets, mapped onto the rules above
+# so a retrained/swapped checkpoint keeps returning real guidance instead of the fallback.
+CLASS_ALIASES = {
+    "bottle": "plastic_bottle",
+    "clear_plastic_bottle": "plastic_bottle",
+    "other_plastic_bottle": "plastic_bottle",
+    "plastic_bottle_cap": "bottle_cap",
+    "metal_bottle_cap": "bottle_cap",
+    "drink_can": "can",
+    "food_can": "can",
+    "aluminium_can": "can",
+    "aluminum_can": "can",
+    "tin_can": "can",
+    "drink_carton": "carton",
+    "tetra_pak": "carton",
+    "paper_cup": "cup",
+    "disposable_plastic_cup": "cup",
+    "plastic_cup": "cup",
+    "glass_jar": "glass_bottle",
+    "plastic_film": "wrapper",
+    "crisp_packet": "wrapper",
+    "plastic_wrapper": "wrapper",
+    "snack_wrapper": "wrapper",
+    "drinking_straw": "straw",
+    "plastic_straw": "straw",
+    "broken_glass_piece": "broken_glass",
+    "glass_shard": "glass_bottle",
+    "foam_container": "styrofoam",
+    "styrofoam_piece": "styrofoam",
+    "polystyrene": "styrofoam",
+    "aluminium_foil": "pop_tab",
+}
+
+
+def normalize_class_name(class_name: str) -> str:
+    """Lower-case, underscore-separated form of a model class name."""
+    cleaned = str(class_name).lower().strip()
+    for ch in (" ", "-", "/"):
+        cleaned = cleaned.replace(ch, "_")
+    while "__" in cleaned:
+        cleaned = cleaned.replace("__", "_")
+    return cleaned.strip("_")
+
+
 def get_waste_rule(class_name: str) -> dict:
-    """Return the waste sorting rule and disposal guide for a detected class."""
-    cleaned_name = str(class_name).lower().strip().replace(" ", "_")
-    base = WASTE_RULES.get(cleaned_name)
+    """Return the waste sorting rule and disposal guide for a detected class.
+
+    The returned dict is a deep copy: callers mutate the response per request,
+    and the nested `contamination` dict would otherwise be shared module state.
+    """
+    cleaned_name = normalize_class_name(class_name)
+    key = cleaned_name if cleaned_name in WASTE_RULES else CLASS_ALIASES.get(cleaned_name)
+    base = WASTE_RULES.get(key) if key else None
     if base:
-        return dict(base)
-    fallback = dict(DEFAULT_RULE)
-    fallback["label"] = cleaned_name.replace("_", " ").title()
+        return copy.deepcopy(base)
+    fallback = copy.deepcopy(DEFAULT_RULE)
+    fallback["label"] = cleaned_name.replace("_", " ").title() or DEFAULT_RULE["label"]
     return fallback
