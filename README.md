@@ -38,7 +38,8 @@ src/
 │   ├── ledger/               EcoLedger, WeeklyActivityChart
 │   └── leaderboard/          Leaderboard
 ├── pages/                    ScannerPage (wires everything), MapPage, AnalyticsPage, LeaderboardPage
-└── utils/                    frame.js (video -> Blob), boxMapping.js (overlay geometry), audio.js
+└── utils/                    frame.js (video -> Blob), boxMapping.js (overlay geometry),
+                              classVoter.js (steadies flickering classifications), audio.js
 ```
 
 ## Running the backend
@@ -101,9 +102,24 @@ holding up to the camera.
 `video` element straight to ONNX Runtime Web / TensorFlow.js and map the output
 through `toDetection`. Nothing else changes.
 
+**Stability:** the model classifies every frame from scratch with no memory of
+the last one, so on a live feed it flips between close classes (say
+`plastic_bottle` and `glass_bottle`) from tick to tick. Showing that raw output
+makes the detail panel unreadable. `utils/classVoter.js` runs a rolling-window
+vote with hysteresis over the last `DETECTION_VOTE_WINDOW` ticks:
+
+- A class needs `DETECTION_ADOPT_VOTES` to take over the panel — set above half
+  the window, so two alternating classes deadlock instead of trading the lead.
+- It only needs `DETECTION_KEEP_VOTES` to stay. A single bar for both would let
+  a noisy stretch blank the panel out, and a reading that keeps vanishing is as
+  unreadable as one that keeps changing.
+
+A class that genuinely wins the window still takes over right away, so swapping
+the object in front of the camera is still responsive (~1s).
+
 **Tuning** (`config/constants.js`): `DETECTION_INTERVAL_MS` sets how often frames
-are sent, `DETECTION_HOLD_MS` how long a box survives a dropped frame, and
-`BOX_SMOOTHING` how hard the box is damped against jitter.
+are sent; `BOX_SMOOTHING` and `CONFIDENCE_SMOOTHING` damp the box and the
+percentage against jitter once a class is on screen.
 
 **Overlay geometry:** the video is drawn with `object-fit: cover`, so the element
 shows a centre-crop of the frame whenever the camera's aspect ratio differs from

@@ -5,15 +5,32 @@ export const LOCATION_LABEL = "Jaipur, IN";
 // the next one is scheduled only after the previous one finishes.
 export const DETECTION_INTERVAL_MS = 200;
 
-// Keep showing the last hit this long after it stops being detected, so a
-// single dropped frame doesn't blink the overlay off and on.
-export const DETECTION_HOLD_MS = 700;
+// How many recent ticks are considered when deciding what to display. A class
+// must win a majority of this window to appear (or to stay shown), which is
+// what keeps a single flickered misclassification from swapping the panel.
+// Larger = steadier but slower to react; smaller = snappier but jitterier.
+// Keep this EVEN: with an odd window two alternating classes still hand the
+// majority back and forth every tick, which is the exact thrash this prevents.
+export const DETECTION_VOTE_WINDOW = 6;
 
-// Weight of the newest box in the smoothing average (0..1). Lower = steadier
-// but laggier; higher = snappier but jitterier.
+// Votes (out of DETECTION_VOTE_WINDOW) a class needs to take over the panel.
+// Must beat half the window outright (see createClassVoter's guard) so two
+// alternating classes deadlock at 3-3 instead of trading the lead every tick.
+export const DETECTION_ADOPT_VOTES = 4;
+
+// Votes the class already on screen needs to stay there. Deliberately much
+// lower than the adopt bar: a noisy stretch should not blank the panel out,
+// since a reading that keeps vanishing is as unreadable as one that keeps
+// changing. Lower = clings longer after the object leaves.
+export const DETECTION_KEEP_VOTES = 2;
+
+// Weight of the newest reading in the box/confidence smoothing average (0..1),
+// applied only while the same class keeps winning. Lower = steadier but
+// laggier; higher = snappier but jitterier.
 export const BOX_SMOOTHING = 0.45;
+export const CONFIDENCE_SMOOTHING = 0.35;
 
-// Consecutive failed requests before the stale box is cleared off the feed.
+// Consecutive failed requests before the stale reading is cleared off the feed.
 export const MAX_CONSECUTIVE_ERRORS = 3;
 
 // Display-only. Browsers don't expose the codec of a getUserMedia stream.
