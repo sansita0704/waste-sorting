@@ -5,6 +5,7 @@ import {
   DETECTION_ADOPT_VOTES,
   DETECTION_INTERVAL_MS,
   DETECTION_KEEP_VOTES,
+  DETECTION_MAX_MISSES,
   DETECTION_VOTE_WINDOW,
   MAX_CONSECUTIVE_ERRORS,
 } from "../config/constants";
@@ -56,6 +57,7 @@ export function useDetection(videoRef, enabled) {
       windowSize: DETECTION_VOTE_WINDOW,
       adoptVotes: DETECTION_ADOPT_VOTES,
       keepVotes: DETECTION_KEEP_VOTES,
+      maxMisses: DETECTION_MAX_MISSES,
     });
     // Freshest full Detection seen for each class name, so once a class wins
     // the vote we have its latest box/confidence/steps ready to show.

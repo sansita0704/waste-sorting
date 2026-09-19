@@ -1,3 +1,7 @@
+import { RefreshCw, WifiOff } from "lucide-react";
+import Button from "./Button";
+import EmptyState from "./EmptyState";
+
 /**
  * Renders loading / error / data states for a `useAsyncData` query.
  * Usage: <AsyncView query={query} skeletonClassName="h-40">{(data) => ...}</AsyncView>
@@ -7,15 +11,18 @@ export default function AsyncView({ query, skeletonClassName = "h-40", children 
 
   if (error) {
     return (
-      <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/5 p-4 text-sm">
-        <p className="text-red-400">Couldn't load this data. Check your connection and try again.</p>
-        <button
-          type="button"
-          onClick={reload}
-          className="mt-2 rounded-lg border border-zinc-700 px-3 py-1.5 text-zinc-200 hover:bg-zinc-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-        >
-          Retry
-        </button>
+      <div role="alert">
+        <EmptyState
+          icon={WifiOff}
+          tone="danger"
+          title="Couldn't load this"
+          body="The backend didn't respond. Check that it's running, then try again."
+        />
+        <div className="flex justify-center pb-2">
+          <Button onClick={reload} icon={RefreshCw} variant="secondary" size="sm">
+            Retry
+          </Button>
+        </div>
       </div>
     );
   }
@@ -25,10 +32,13 @@ export default function AsyncView({ query, skeletonClassName = "h-40", children 
       <div
         role="status"
         aria-label="Loading"
-        className={`animate-pulse rounded-xl bg-zinc-800/60 ${skeletonClassName}`}
-      />
+        className={`relative overflow-hidden rounded-xl bg-white/[0.04] ${skeletonClassName}`}
+      >
+        <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/[0.07] to-transparent" />
+      </div>
     );
   }
 
-  return children(data);
+  // `loading && data` keeps the previous render on screen during a reload.
+  return data ? children(data) : null;
 }

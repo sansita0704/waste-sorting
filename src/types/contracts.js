@@ -6,7 +6,8 @@
 
 /**
  * @typedef {Object} Detection
- * @property {string} className          e.g. "PET Plastic Bottle"
+ * @property {string} className          human label, e.g. "PET Plastic Bottle"
+ * @property {string} rawClass           model class id, e.g. "plastic_bottle"
  * @property {string} category           e.g. "Dry / Recyclable"
  * @property {number} confidence         0..1
  * @property {number} weightG            estimated grams

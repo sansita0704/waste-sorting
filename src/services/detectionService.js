@@ -24,6 +24,10 @@ function toDetection(raw) {
   if (!raw || !raw.label) return null;
   return {
     className: raw.label,
+    // The model's own class id (e.g. "plastic_bottle"). `className` above is the
+    // human label from the rule table; anything keyed by the model's taxonomy
+    // must use this instead.
+    rawClass: raw.class_name,
     category: raw.category,
     confidence: raw.confidence,
     weightG: raw.weight_g,
@@ -33,6 +37,7 @@ function toDetection(raw) {
     box: raw.bbox,
     detections: (raw.detections ?? []).map((d) => ({
       className: d.label,
+      rawClass: d.class_name,
       category: d.category,
       confidence: d.confidence,
       box: d.bbox,

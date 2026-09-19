@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 from ultralytics import YOLO
 
-from waste_rules import get_waste_rule
+from waste_rules import WASTE_RULES, get_waste_rule
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("ecoscan")
@@ -312,6 +312,22 @@ async def detect_waste(frame: UploadFile = File(...)):
 # =========================================================================
 # Auxiliary endpoints to ensure full frontend functionality with real API
 # =========================================================================
+
+@app.get("/api/v1/waste-rules")
+async def get_waste_rules():
+    """
+    The configured disposal rules, keyed by model class name.
+
+    Lets the Waste Guide render the rules that are actually in force instead of
+    keeping a second copy in the frontend that can drift out of step.
+    """
+    classes = getattr(app.state, "classes", {}) or {}
+    known = list(classes.values()) if isinstance(classes, dict) else list(classes)
+    return {
+        "classes": known,
+        "rules": {name: get_waste_rule(name) for name in (known or WASTE_RULES.keys())},
+    }
+
 
 class DisposalTokenRequest(BaseModel):
     class_name: Optional[str] = None

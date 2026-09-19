@@ -18,6 +18,7 @@ export function wait(ms, signal) {
 
 export const MOCK_DETECTION = {
   className: "PET Plastic Bottle",
+  rawClass: "plastic_bottle",
   category: "Dry / Recyclable",
   confidence: 0.964,
   weightG: 28.5,
@@ -45,6 +46,7 @@ export async function mockDetect(signal) {
     detections: [
       {
         className: MOCK_DETECTION.className,
+        rawClass: MOCK_DETECTION.rawClass,
         category: MOCK_DETECTION.category,
         confidence: MOCK_DETECTION.confidence,
         box,
@@ -68,6 +70,36 @@ export const MOCK_LEDGER = {
     { day: "Sat", items: 7 },
     { day: "Sun", items: 1 },
   ],
+};
+
+// Mirrors the shape of GET /api/v1/waste-rules for the no-backend demo path.
+const RULE = (label, category, grade) => ({
+  label,
+  category,
+  material_grade: grade,
+  weight_g: 0,
+  contamination: { level: "Low", label: "Unknown", score: 0.1 },
+  steps: [],
+});
+
+export const MOCK_WASTE_RULES = {
+  classes: [
+    "plastic_bottle", "wrapper", "can", "carton", "cup",
+    "bottle_cap", "glass_bottle", "straw", "broken_glass", "styrofoam", "pop_tab",
+  ],
+  rules: {
+    plastic_bottle: RULE("PET Plastic Bottle", "Dry / Recyclable", "PET-01"),
+    wrapper: RULE("Food Wrapper / Film", "Non-Recyclable / Landfill", "Multi-layer Plastic"),
+    can: RULE("Aluminum Beverage Can", "Dry / Recyclable", "ALU-41"),
+    carton: RULE("Beverage / Liquid Carton", "Dry / Recyclable", "TetraPak / PAP-21"),
+    cup: RULE("Disposable Coffee / Drink Cup", "Mixed / Landfill", "PAP-PE Composite"),
+    bottle_cap: RULE("Plastic Bottle Cap", "Dry / Recyclable", "HDPE-02"),
+    glass_bottle: RULE("Glass Bottle / Jar", "Dry / Recyclable", "GL-70"),
+    straw: RULE("Plastic Straw", "Non-Recyclable / Landfill", "PP-05 Single-Use"),
+    broken_glass: RULE("Broken Glass Shards", "Hazardous / Safe Disposal", "GL-Hazardous"),
+    styrofoam: RULE("Styrofoam Container / EPS", "Non-Recyclable / Landfill", "PS-06"),
+    pop_tab: RULE("Aluminum Can Pop Tab", "Dry / Recyclable", "ALU-41"),
+  },
 };
 
 export const MOCK_HUB = {

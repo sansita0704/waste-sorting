@@ -32,7 +32,7 @@ export default function QrGlyph({ value }) {
   return (
     <svg
       viewBox={`-1 -1 ${SIZE + 2} ${SIZE + 2}`}
-      className="h-44 w-44 rounded-lg bg-zinc-950 p-1"
+      className="h-44 w-44 rounded-xl bg-ink-950 p-1.5"
       role="img"
       aria-label="Disposal token QR code"
     >
@@ -42,7 +42,7 @@ export default function QrGlyph({ value }) {
       {FINDERS.map(([ox, oy]) => (
         <g key={`${ox}-${oy}`}>
           <rect x={ox} y={oy} width="7" height="7" fill="#fff" />
-          <rect x={ox + 1} y={oy + 1} width="5" height="5" fill="#09090b" />
+          <rect x={ox + 1} y={oy + 1} width="5" height="5" fill="#101230" />
           <rect x={ox + 2} y={oy + 2} width="3" height="3" fill="#fff" />
         </g>
       ))}

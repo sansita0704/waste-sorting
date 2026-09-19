@@ -1,38 +1,40 @@
-﻿import { ACCENT } from "../../config/constants";
+import { DETECTION } from "../../config/constants";
 import { mapBoxToViewport } from "../../utils/boxMapping";
 
 const CORNERS = [
-  "left-0 top-0 border-l-2 border-t-2",
-  "right-0 top-0 border-r-2 border-t-2",
-  "left-0 bottom-0 border-l-2 border-b-2",
-  "right-0 bottom-0 border-r-2 border-b-2",
+  "left-0 top-0 border-l-2 border-t-2 rounded-tl-md",
+  "right-0 top-0 border-r-2 border-t-2 rounded-tr-md",
+  "left-0 bottom-0 border-l-2 border-b-2 rounded-bl-md",
+  "right-0 bottom-0 border-r-2 border-b-2 rounded-br-md",
 ];
 
 function Box({ rect, label, confidence, primary }) {
   return (
     <div
-      className={`pointer-events-none absolute rounded-md transition-[left,top,width,height] duration-150 ease-out ${
-        primary ? "border-2" : "border"
+      className={`pointer-events-none absolute rounded-lg transition-[left,top,width,height] duration-150 ease-out ${
+        primary ? "animate-fade-in" : ""
       }`}
       style={{
         left: `${rect.left}px`,
         top: `${rect.top}px`,
         width: `${rect.width}px`,
         height: `${rect.height}px`,
-        borderColor: primary ? ACCENT : `${ACCENT}80`,
-        boxShadow: primary ? `0 0 24px ${ACCENT}55` : "none",
+        border: primary ? `2px solid ${DETECTION}` : `1px solid ${DETECTION}70`,
+        boxShadow: primary ? `0 0 28px -4px ${DETECTION}66, inset 0 0 22px -12px ${DETECTION}` : "none",
       }}
     >
       <span
-        className={`absolute -left-0.5 whitespace-nowrap rounded-t-md px-2 py-1 font-semibold ${
-          primary
-            ? "-top-7 bg-emerald-500 text-xs text-zinc-950"
-            : "-top-5 bg-emerald-500/70 text-[10px] text-zinc-950"
+        className={`absolute -left-0.5 whitespace-nowrap rounded-md font-semibold text-ink-950 ${
+          primary ? "-top-7 px-2 py-1 text-xs" : "-top-5 px-1.5 py-0.5 text-[10px]"
         }`}
+        style={{ backgroundColor: primary ? DETECTION : `${DETECTION}B3` }}
       >
-        {label} {(confidence * 100).toFixed(1)}%
+        {label} {(confidence * 100).toFixed(0)}%
       </span>
-      {primary && CORNERS.map((c) => <span key={c} className={`absolute h-3 w-3 border-white ${c}`} />)}
+      {primary &&
+        CORNERS.map((c) => (
+          <span key={c} className={`absolute h-3.5 w-3.5 border-white/90 ${c}`} />
+        ))}
     </div>
   );
 }
@@ -66,4 +68,3 @@ export default function BoundingBox({ detection, mirrored = false, viewport }) {
     </div>
   );
 }
-

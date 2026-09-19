@@ -1,35 +1,39 @@
 /**
- * Rolling-window vote with hysteresis, over a stream of per-tick classifications.
+ * Rolling vote with hysteresis over a stream of per-tick classifications.
  *
  * A stateless per-frame classifier flickers between close classes on a live
- * feed, so treating each frame as ground truth swaps the UI every tick.
+ * feed, so treating each frame as ground truth swaps the UI every tick. Two
+ * separate mechanisms keep the reading steady without making it sluggish:
  *
- * Two different thresholds turn that into one stable reading:
- *  - `adoptVotes` (high) is what a class needs to take over the display. Set
- *    above half the window so two alternating classes deadlock and neither is
- *    adopted, instead of trading the lead back and forth.
- *  - `keepVotes` (low) is all the current class needs to stay. Without this the
- *    display blanks out every time a noisy stretch dips the leader below the
- *    adopt bar - readable-but-absent is still unreadable.
+ *  - WHICH class shows is decided by a majority over the last `windowSize`
+ *    *detections*. Ticks where the model found nothing are deliberately NOT
+ *    counted here. A real webcam misses plenty of frames, and letting those
+ *    misses dilute the window means a genuine item can sit just under the bar
+ *    forever - the item never appears, or an impostor that happens to cluster
+ *    wins instead.
  *
- * A clear challenger still takes over immediately: adopting is checked first,
- * so holding on never outranks a class that has genuinely won the window.
+ *  - WHETHER anything shows at all is decided by `maxMisses` consecutive empty
+ *    ticks, which is the honest signal that the item has left the frame.
+ *
+ * Thrash is prevented by requiring the leader to beat the runner-up outright
+ * rather than by setting a high threshold. With an EVEN window, two classes
+ * alternating every frame always tie (windowSize/2 each), so neither is ever
+ * adopted and the display holds still. That property is why the window must be
+ * even, and it lets `adoptVotes` stay low enough to react in a couple of frames.
  */
-export function createClassVoter({ windowSize, adoptVotes, keepVotes }) {
-  // Two classes alternating every tick give the leader ceil(windowSize / 2)
-  // votes, and with an odd window that lead changes hands as the window slides.
-  // Requiring more than that is what makes perfect ambiguity hold steady rather
-  // than flicker. A plain "strict majority" is not enough.
-  if (adoptVotes <= Math.ceil(windowSize / 2)) {
-    throw new Error(
-      `adoptVotes ${adoptVotes} must exceed ${Math.ceil(windowSize / 2)} for windowSize ${windowSize}`
-    );
+export function createClassVoter({ windowSize, adoptVotes, keepVotes, maxMisses }) {
+  if (windowSize % 2 !== 0) {
+    throw new Error(`windowSize ${windowSize} must be even, or alternating classes thrash`);
+  }
+  if (adoptVotes < 2 || adoptVotes > windowSize) {
+    throw new Error(`adoptVotes ${adoptVotes} must be between 2 and windowSize ${windowSize}`);
   }
   if (keepVotes < 1 || keepVotes > adoptVotes) {
     throw new Error(`keepVotes ${keepVotes} must be between 1 and adoptVotes ${adoptVotes}`);
   }
 
-  const votes = [];
+  let votes = [];
+  let misses = 0;
   let shown = null;
 
   return {
@@ -38,23 +42,36 @@ export function createClassVoter({ windowSize, adoptVotes, keepVotes }) {
      * @returns {string|null} the class that should be displayed.
      */
     push(className) {
-      votes.push(className);
-      if (votes.length > windowSize) votes.shift();
-
-      const counts = new Map();
-      let leader = null;
-      let leaderVotes = 0;
-      for (const name of votes) {
-        if (!name) continue;
-        const count = (counts.get(name) ?? 0) + 1;
-        counts.set(name, count);
-        if (count > leaderVotes) {
-          leader = name;
-          leaderVotes = count;
+      if (className) {
+        misses = 0;
+        votes.push(className);
+        if (votes.length > windowSize) votes.shift();
+      } else {
+        misses += 1;
+        if (misses >= maxMisses) {
+          votes = [];
+          shown = null;
+          return null;
         }
       }
 
-      if (leader && leaderVotes >= adoptVotes) {
+      const counts = new Map();
+      for (const name of votes) counts.set(name, (counts.get(name) ?? 0) + 1);
+
+      let leader = null;
+      let best = 0;
+      let runnerUp = 0;
+      for (const [name, count] of counts) {
+        if (count > best) {
+          runnerUp = best;
+          best = count;
+          leader = name;
+        } else if (count > runnerUp) {
+          runnerUp = count;
+        }
+      }
+
+      if (leader && best >= adoptVotes && best > runnerUp) {
         shown = leader;
       } else if (!shown || (counts.get(shown) ?? 0) < keepVotes) {
         shown = null;
@@ -62,7 +79,8 @@ export function createClassVoter({ windowSize, adoptVotes, keepVotes }) {
       return shown;
     },
     reset() {
-      votes.length = 0;
+      votes = [];
+      misses = 0;
       shown = null;
     },
   };

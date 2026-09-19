@@ -13,34 +13,65 @@ npm run dev        # http://localhost:5173  (camera needs localhost or HTTPS)
 ```
 src/
 ├── main.jsx / App.jsx        App shell: camera + mute state, page switching
-├── config/                   env.js, constants.js, navigation.js
-├── types/contracts.js        JSDoc shapes the UI expects (Detection, LedgerSummary, ...)
+├── config/
+│   ├── wasteTaxonomy.js      material families + bin mapping (FRONTEND RULES, not model output)
+│   └── env.js, constants.js, navigation.js
+├── types/contracts.js        JSDoc shapes the UI expects (Detection, ...)
 ├── services/                 ALL backend / model access lives here
 │   ├── http.js               fetch wrapper
 │   ├── detectionService.js   <- plug your ML model in here
+│   ├── wasteRulesService.js  the configured disposal rules, for the Waste Guide
+│   ├── scanHistory.js        local scan log -> real impact figures (localStorage)
 │   ├── disposalService.js    QR token + nearest hub
-│   ├── ledgerService.js      EcoPoints summary + leaderboard
-│   └── mockData.js           placeholder data (delete when backend is live)
+│   ├── ledgerService.js      community leaderboard
+│   └── mockData.js           placeholder data for the no-backend demo path
 ├── hooks/
 │   ├── useCamera.js          WebRTC getUserMedia lifecycle
 │   ├── useDetection.js       frame -> model loop (no overlapping requests)
 │   ├── useVideoViewport.js   maps frame coords -> element px through the cover-crop
+│   ├── useScanLog.js         de-duplicated scan recording + derived stats
 │   ├── useMeasuredFps.js     real FPS from the video element
 │   ├── useAsyncData.js       loading/error/data for any service call
 │   └── useDisposalToken.js
 ├── components/
-│   ├── ui/                   Card, Badge, ActionButton, StatTile, AsyncView
-│   ├── layout/Header.jsx
-│   ├── scanner/              LiveStream, BoundingBox, TelemetryBar, CameraPlaceholder,
-│   │                         ClassificationPanel, ContaminationMeter, PrepChecklist,
-│   │                         TokenModal, QrGlyph
+│   ├── ui/                   Card, Badge, Button, StatTile, AsyncView, EmptyState, ProgressRing
+│   ├── layout/               Sidebar (desktop), MobileNav (phones), Header, PageHeader
+│   ├── scanner/              LiveStream, BoundingBox, DetectionResultCard, BinRecommendation,
+│   │                         ConfidenceMeter, ContaminationMeter, PrepChecklist, WhyThisBin,
+│   │                         CompositeNotice, MobileResultSheet, TelemetryBar, TokenModal
+│   ├── illustrations/        WasteIllustration (inline SVG, one family)
+│   ├── landing/              HeroScanVisual
+│   ├── guide/                WasteCategoryCard
 │   ├── map/                  DropoffFinder, MapCanvas
-│   ├── ledger/               EcoLedger, WeeklyActivityChart
+│   ├── ledger/               WeeklyActivityChart
 │   └── leaderboard/          Leaderboard
-├── pages/                    ScannerPage (wires everything), MapPage, AnalyticsPage, LeaderboardPage
+├── pages/                    LandingPage, ScannerPage, WasteGuidePage, FacilitiesPage, ImpactPage
 └── utils/                    frame.js (video -> Blob), boxMapping.js (overlay geometry),
                               classVoter.js (steadies flickering classifications), audio.js
 ```
+
+## What is AI, and what is a rule
+
+The model returns exactly three things: an object **class** (one of eleven), a
+**confidence**, and a **bounding box**. Everything else the UI shows — the human
+label, material grade, category, estimated weight, preparation risk and the prep
+steps — is a lookup in `backend/waste_rules.py`. Bin mapping and material
+families are frontend rules in `config/wasteTaxonomy.js`.
+
+The UI is written to keep that line visible: the "Why this bin?" panel on every
+result spells out the three stages, and preparation risk is labelled as guidance
+rather than something the camera detected. Please keep new UI honest the same way.
+
+Your own impact figures come from `services/scanHistory.js`, a per-browser
+localStorage log written when the detection loop confirms a new item. The
+community leaderboard is sample data from the backend and is labelled as such.
+
+## Design system
+
+Tokens live in `tailwind.config.js`: deep navy `ink.*` surfaces, violet `brand.*`
+for AI interaction, cyan `tech.*` reserved for live detection states, `success` /
+`warn` / `danger` for bins, and magenta `accent.*` used sparingly. Type is Inter.
+Prefer these tokens over raw Tailwind palette classes so the theme stays coherent.
 
 ## Running the backend
 ```bash
@@ -105,17 +136,25 @@ through `toDetection`. Nothing else changes.
 **Stability:** the model classifies every frame from scratch with no memory of
 the last one, so on a live feed it flips between close classes (say
 `plastic_bottle` and `glass_bottle`) from tick to tick. Showing that raw output
-makes the detail panel unreadable. `utils/classVoter.js` runs a rolling-window
-vote with hysteresis over the last `DETECTION_VOTE_WINDOW` ticks:
+makes the detail panel unreadable. `utils/classVoter.js` steadies it with two
+independent mechanisms:
 
-- A class needs `DETECTION_ADOPT_VOTES` to take over the panel — set above half
-  the window, so two alternating classes deadlock instead of trading the lead.
-- It only needs `DETECTION_KEEP_VOTES` to stay. A single bar for both would let
-  a noisy stretch blank the panel out, and a reading that keeps vanishing is as
-  unreadable as one that keeps changing.
+- **Which** class shows is a vote over the last `DETECTION_VOTE_WINDOW`
+  *detections*. Ticks where the model found nothing are deliberately not counted.
+  A real webcam misses a third of frames, and letting misses dilute the window
+  leaves a genuine item stuck just under the bar — it never appears, or an
+  impostor that happens to cluster wins instead.
+- **Whether** anything shows is `DETECTION_MAX_MISSES` consecutive empty ticks,
+  which is the honest signal that the item has left the frame.
 
-A class that genuinely wins the window still takes over right away, so swapping
-the object in front of the camera is still responsive (~1s).
+Thrash is prevented by requiring the leader to beat the runner-up *outright*,
+not by a high threshold. With an even window two alternating classes always tie,
+so neither is adopted — which is why the window must be even, and why
+`DETECTION_ADOPT_VOTES` can stay low enough to react in about a second.
+
+Measured in-browser against a simulated 65%-hit-rate feed: ~1.2s to first
+result, correct label on 100% of samples, zero flips over 20s. Dropping to
+window 4 / adopt 2 is ~0.35s faster at roughly double the wrong-label rate.
 
 **Tuning** (`config/constants.js`): `DETECTION_INTERVAL_MS` sets how often frames
 are sent; `BOX_SMOOTHING` and `CONFIDENCE_SMOOTHING` damp the box and the

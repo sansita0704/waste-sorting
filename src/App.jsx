@@ -1,32 +1,72 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import Header from "./components/layout/Header";
+import MobileNav from "./components/layout/MobileNav";
+import Sidebar from "./components/layout/Sidebar";
 import { useCamera } from "./hooks/useCamera";
-import AnalyticsPage from "./pages/AnalyticsPage";
-import LeaderboardPage from "./pages/LeaderboardPage";
-import MapPage from "./pages/MapPage";
+import { useScanLog } from "./hooks/useScanLog";
+import FacilitiesPage from "./pages/FacilitiesPage";
+import ImpactPage from "./pages/ImpactPage";
+import LandingPage from "./pages/LandingPage";
 import ScannerPage from "./pages/ScannerPage";
+import WasteGuidePage from "./pages/WasteGuidePage";
 
 /**
- * App shell. The camera and mute state live here so they survive page switches
- * (the camera keeps running; the detection loop pauses when Scanner unmounts).
+ * App shell. The camera, mute state and the local scan log live here so they
+ * survive page switches (the camera keeps running; the detection loop pauses
+ * when Scanner unmounts).
  * If you later need URLs, swap the `view` state for react-router routes.
  */
 export default function App() {
-  const [view, setView] = useState("scanner");
+  const [view, setView] = useState("home");
   const [muted, setMuted] = useState(false);
   const camera = useCamera();
+  const { stats, track, reset } = useScanLog();
+
+  const navigate = useCallback((next) => {
+    setView(next);
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, []);
+
+  const startScanning = useCallback(() => {
+    navigate("scanner");
+    camera.start();
+  }, [navigate, camera]);
 
   return (
-    <div className="min-h-screen bg-base text-zinc-100">
-      <Header view={view} onNavigate={setView} camera={camera} />
-      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
-        {view === "scanner" && (
-          <ScannerPage camera={camera} muted={muted} onToggleMute={() => setMuted((m) => !m)} />
-        )}
-        {view === "map" && <MapPage />}
-        {view === "analytics" && <AnalyticsPage />}
-        {view === "leaderboard" && <LeaderboardPage />}
-      </main>
+    <div className="min-h-screen">
+      <Sidebar view={view} onNavigate={navigate} points={stats.points} />
+
+      <div className="lg:pl-60">
+        <Header camera={camera} onNavigate={navigate} />
+
+        <main
+          id="main"
+          className="mx-auto max-w-7xl px-4 pb-24 pt-6 sm:px-6 lg:pb-10"
+        >
+          {view === "home" && (
+            <LandingPage
+              stats={stats}
+              onStart={startScanning}
+              onExplore={() => navigate("impact")}
+            />
+          )}
+          {view === "scanner" && (
+            <ScannerPage
+              camera={camera}
+              muted={muted}
+              onToggleMute={() => setMuted((m) => !m)}
+              onScan={track}
+            />
+          )}
+          {view === "guide" && <WasteGuidePage stats={stats} />}
+          {view === "facilities" && <FacilitiesPage />}
+          {view === "impact" && (
+            <ImpactPage stats={stats} onReset={reset} onStartScanning={startScanning} />
+          )}
+        </main>
+      </div>
+
+      <MobileNav view={view} onNavigate={navigate} />
     </div>
   );
 }
