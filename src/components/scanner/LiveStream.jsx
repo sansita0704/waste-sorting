@@ -71,7 +71,7 @@ export default function LiveStream({
                 </Badge>
               )}
             </div>
-            <BoundingBox detection={detection} />
+            <BoundingBox detection={detection} mirrored={mirrored} />
           </>
         )}
 

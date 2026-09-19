@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from PIL import Image
 from ultralytics import YOLO
@@ -92,12 +93,24 @@ async def detect_waste(frame: UploadFile = File(...)):
         if not image_bytes:
             return None
 
-        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        image = Image.open(io.BytesIO(image_bytes))
+        # Force decoding here so truncated/corrupt uploads fail before inference.
+        image.load()
+        image = image.convert("RGB")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid image file: {str(e)}")
 
     # Run YOLO inference
-    results = app.state.model.predict(image, conf=0.25, verbose=False)
+    # Ultralytics inference is CPU/GPU-bound and synchronous. Keep it off the
+    # event loop so health checks and other API requests remain responsive.
+    results = await run_in_threadpool(
+        app.state.model.predict,
+        source=image,
+        conf=0.35,
+        iou=0.45,
+        max_det=20,
+        verbose=False,
+    )
 
     if not results or len(results[0].boxes) == 0:
         return None
@@ -108,14 +121,19 @@ async def detect_waste(frame: UploadFile = File(...)):
 
     cls_id = int(best_box.cls[0])
     confidence = float(best_box.conf[0])
-    class_name = app.state.model.names.get(cls_id, f"class_{cls_id}")
+    names = app.state.model.names
+    if isinstance(names, dict):
+        class_name = names.get(cls_id, f"class_{cls_id}")
+    else:
+        class_name = names[cls_id] if 0 <= cls_id < len(names) else f"class_{cls_id}"
 
     # xyxyn gives normalized coordinates: [x1, y1, x2, y2] in 0..1 range
     x1, y1, x2, y2 = best_box.xyxyn[0].tolist()
-    x = max(0.0, min(1.0, float(x1)))
-    y = max(0.0, min(1.0, float(y1)))
-    w = max(0.0, min(1.0, float(x2 - x1)))
-    h = max(0.0, min(1.0, float(y2 - y1)))
+    x1, y1, x2, y2 = [max(0.0, min(1.0, float(v))) for v in (x1, y1, x2, y2)]
+    x = x1
+    y = y1
+    w = max(0.0, x2 - x1)
+    h = max(0.0, y2 - y1)
 
     rule = get_waste_rule(class_name)
 

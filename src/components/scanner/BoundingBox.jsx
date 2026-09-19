@@ -8,7 +8,7 @@ const CORNERS = [
 ];
 
 /** Draws a detection's normalised (0..1) box over the video. Renders nothing without one. */
-export default function BoundingBox({ detection }) {
+export default function BoundingBox({ detection, mirrored = false }) {
   if (!detection?.box) return null;
   const { x, y, w, h } = detection.box;
 
@@ -17,7 +17,11 @@ export default function BoundingBox({ detection }) {
       aria-hidden="true"
       className="pointer-events-none absolute rounded-md border-2 transition-all duration-200"
       style={{
-        left: `${x * 100}%`,
+        // The video is mirrored for the user, while frames sent to the model
+        // are intentionally unmirrored. Mirror the x coordinate as well so
+        // the box stays attached to the detected object.
+        left: mirrored ? undefined : `${x * 100}%`,
+        right: mirrored ? `${(1 - x - w) * 100}%` : undefined,
         top: `${y * 100}%`,
         width: `${w * 100}%`,
         height: `${h * 100}%`,

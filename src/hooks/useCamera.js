@@ -34,8 +34,13 @@ export function useCamera() {
     try {
       const next = await navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS);
       const [track] = next.getVideoTracks();
+      if (!track) {
+        next.getTracks().forEach((item) => item.stop());
+        setStatus("error");
+        return;
+      }
       // Camera unplugged or taken by another app.
-      track?.addEventListener("ended", () => {
+      track.addEventListener("ended", () => {
         releaseTracks();
         setStream(null);
         setSettings(null);
